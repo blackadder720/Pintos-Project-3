@@ -171,3 +171,35 @@ bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
 
   return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
 }
+
+bool grow_stack (void *uva)
+{
+  if (PHYS_BASE - pg_round_down(uva) > MAX_STACK_SIZE)
+    {
+      return false;
+    }
+ struct sup_page_entry *spte = malloc(sizeof(struct sup_page_entry));
+  if (!spte)
+    {
+      return false;
+    }
+  spte->uva = pg_round_down(uva);
+  spte->is_loaded = true;
+  spte->type = SWAP;
+
+  uint8_t *frame = frame_alloc (PAL_USER);
+  if (!frame)
+    {
+      free(spte);
+      return false;
+    }
+
+  if (!install_page(spte->uva, frame, true))
+    {
+      free(spte);
+      frame_free(frame);
+      return false;
+    }
+
+  return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
+}

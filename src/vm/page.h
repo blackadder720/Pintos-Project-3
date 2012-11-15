@@ -8,6 +8,9 @@
 #define SWAP 1
 #define MMAP 2
 
+// 256 KB
+#define MAX_STACK_SIZE (1 << 18)
+
 struct sup_page_entry {
   uint8_t type;
   void *uva;
@@ -39,5 +42,6 @@ bool add_file_to_page_table (struct file *file, int32_t ofs, uint8_t *upage,
 			     bool writable);
 bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
 			    uint32_t read_bytes, uint32_t zero_bytes);
+bool grow_stack (void *uva);
 
 #endif /* vm/page.h */
