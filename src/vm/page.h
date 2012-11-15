@@ -2,6 +2,7 @@
 #define VM_PAGE_H
 
 #include <hash.h>
+#include "vm/frame.h"
 
 #define FILE 0
 #define SWAP 1
@@ -11,6 +12,7 @@ struct sup_page_entry {
   uint8_t type;
   void *uva;
   bool writable;
+
   bool is_loaded;
 
   // For files
@@ -35,5 +37,7 @@ bool load_file (struct sup_page_entry *spte);
 bool add_file_to_page_table (struct file *file, int32_t ofs, uint8_t *upage,
 			     uint32_t read_bytes, uint32_t zero_bytes,
 			     bool writable);
+bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
+			    uint32_t read_bytes, uint32_t zero_bytes);
 
 #endif /* vm/page.h */

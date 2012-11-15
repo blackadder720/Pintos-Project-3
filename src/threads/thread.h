@@ -119,6 +119,9 @@ struct thread
     struct file* executable;
 
     struct hash spt;
+
+    struct list mmap_list;
+    int mapid;
   };
 
 /* If false (default), use round-robin scheduler.

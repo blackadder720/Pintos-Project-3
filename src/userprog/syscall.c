@@ -13,6 +13,8 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 #define MAX_ARGS 3
 #define USER_VADDR_BOTTOM ((void *) 0x08048000)
@@ -128,7 +130,52 @@ syscall_handler (struct intr_frame *f UNUSED)
 	close(arg[0]);
 	break;
       }
+    case SYS_MMAP:
+      {
+	get_arg(f, &arg[0], 2);
+	arg[1] = user_to_kernel_ptr((const void *) arg[1]);
+	f->eax = mmap(arg[0], (void *) arg[1]);
+	break;
+      }
+    case SYS_MUNMAP:
+      {
+	get_arg(f, &arg[0], 1);
+	munmap(arg[0]);
+	break;
+      }
     }
+}
+
+int mmap (int fd, void *addr)
+{
+  struct file *file = process_get_file(fd);
+  if (!file || !addr || ((uint32_t) addr % PGSIZE) != 0)
+    {
+      return ERROR;
+    }
+  thread_current()->mapid++;
+  int32_t ofs = 0;
+  uint32_t read_bytes = file_length(file);
+  while (read_bytes > 0)
+    {
+      uint32_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      uint32_t page_zero_bytes = PGSIZE - page_read_bytes;
+      if (!add_mmap_to_page_table(file, ofs,
+				  addr, page_read_bytes, page_zero_bytes))
+	{
+	  munmap(thread_current()->mapid);
+	  return ERROR;
+	}
+      read_bytes -= page_read_bytes;
+      ofs += page_read_bytes;
+      addr += PGSIZE;
+  }
+  return thread_current()->mapid;
+}
+
+void munmap (int mapping)
+{
+  process_remove_mmap(mapping);
 }
 
 void halt (void)

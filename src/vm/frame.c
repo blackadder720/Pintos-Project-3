@@ -55,7 +55,6 @@ void frame_add_to_table (void *frame)
 {
   struct frame_entry *fte = malloc(sizeof(struct frame_entry));
   fte->frame = frame;
-  fte->tid = thread_tid();
   
   lock_acquire(&frame_table_lock);
   list_push_back(&frame_table, &fte->elem);

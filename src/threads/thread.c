@@ -492,6 +492,9 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->file_list);
   t->fd = MIN_FD;
 
+  list_init(&t->mmap_list);
+  t->mapid = 0;
+
   list_init(&t->child_list);
   t->cp = NULL;
   t->parent = NO_PARENT;

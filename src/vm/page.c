@@ -1,9 +1,11 @@
 #include <string.h>
+#include <stdbool.h>
 #include "filesys/file.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -30,7 +32,13 @@ static bool page_less_func (const struct hash_elem *a,
 
 static void page_action_func (struct hash_elem *e, void *aux UNUSED)
 {
-  struct sup_page_entry *spte = hash_entry(e, struct sup_page_entry, elem);
+  struct sup_page_entry *spte = hash_entry(e, struct sup_page_entry,
+					   elem);
+  if (spte->is_loaded)
+    {
+      frame_free(pagedir_get_page(thread_current()->pagedir, spte->uva));
+      pagedir_clear_page(thread_current()->pagedir, spte->uva);
+    }
   free(spte);
 }
 
@@ -75,7 +83,7 @@ bool load_page (void *uva)
       success = load_swap(spte);
       break;
     case MMAP:
-      success = load_mmap(spte);
+      success = load_file(spte);
       break;
     }
   return success;
@@ -93,7 +101,6 @@ bool load_mmap (struct sup_page_entry *spte)
 
 bool load_file (struct sup_page_entry *spte)
 {
-  void* addr = pagedir_get_page (thread_current()->pagedir, spte->uva);
   uint8_t *frame = frame_alloc (PAL_USER);
   if (!frame)
     {
@@ -112,8 +119,7 @@ bool load_file (struct sup_page_entry *spte)
       frame_free(frame);
       return false;
     }
-
-  // Set frame->pte = spte
+  // Set frame->pte = spte for eviction
   spte->is_loaded = true;
   
   return true;
@@ -136,6 +142,32 @@ bool add_file_to_page_table (struct file *file, int32_t ofs, uint8_t *upage,
   spte->writable = writable;
   spte->is_loaded = false;
   spte->type = FILE;
+
+  return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
+}
+
+bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
+			     uint32_t read_bytes, uint32_t zero_bytes)
+{
+  struct sup_page_entry *spte = malloc(sizeof(struct sup_page_entry));
+  if (!spte)
+    {
+      return false;
+    }
+  spte->file = file;
+  spte->offset = ofs;
+  spte->uva = upage;
+  spte->read_bytes = read_bytes;
+  spte->zero_bytes = zero_bytes;
+  spte->is_loaded = false;
+  spte->type = MMAP;
+  spte->writable = true;
+
+  if (!process_add_mmap(spte))
+    {
+      free(spte);
+      return false;
+    }
 
   return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
 }

@@ -1,6 +1,7 @@
 #ifndef VM_FRAME_H
 #define VM_FRAME_H
 
+#include "threads/palloc.h"
 #include "threads/synch.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,8 +13,7 @@ struct list frame_table;
 
 struct frame_entry {
   void *frame;
-  tid_t tid;
-  uint32_t *pte;
+  struct sup_page_entry *spte;
   struct list_elem elem;
 };
 
