@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 
 /* States in a thread's life cycle. */
@@ -116,6 +117,8 @@ struct thread
 
     // Needed for denying writes to executables
     struct file* executable;
+
+    struct hash spt;
   };
 
 /* If false (default), use round-robin scheduler.

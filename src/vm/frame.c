@@ -65,5 +65,5 @@ void frame_add_to_table (void *frame)
 bool frame_evict (void *frame)
 {
   return false;
-  // Use clock algorithm with 2 hands
+  // Use clock algorithm
 }

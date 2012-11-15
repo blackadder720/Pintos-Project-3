@@ -1,6 +1,7 @@
 #ifndef VM_FRAME_H
 #define VM_FRAME_H
 
+#include "threads/synch.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <list.h>
