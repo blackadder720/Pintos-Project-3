@@ -17,10 +17,8 @@
 #include "vm/page.h"
 
 #define MAX_ARGS 3
-#define USER_VADDR_BOTTOM ((void *) 0x08048000)
 
 static void syscall_handler (struct intr_frame *);
-int user_to_kernel_ptr(const void *vaddr);
 void get_arg (struct intr_frame *f, int *arg, int n);
 void check_valid_ptr (const void *vaddr);
 void check_valid_buffer (void* buffer, unsigned size);
@@ -37,8 +35,8 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int arg[MAX_ARGS];
-  int esp = user_to_kernel_ptr((const void*) f->esp);
-  switch (* (int *) esp)
+  check_valid_ptr((const void*) f->esp);
+  switch (* (int *) f->esp)
     {
     case SYS_HALT:
       {
@@ -55,8 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
 	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0]);
-	arg[0] = user_to_kernel_ptr((const void *) arg[0]);
-	f->eax = exec((const char *) arg[0]); 
+	f->eax = exec((const char *) arg[0]);
 	break;
       }
     case SYS_WAIT:
@@ -69,7 +66,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
 	get_arg(f, &arg[0], 2);
 	check_valid_string((const void *) arg[0]);
-	arg[0] = user_to_kernel_ptr((const void *) arg[0]);
 	f->eax = create((const char *)arg[0], (unsigned) arg[1]);
 	break;
       }
@@ -77,7 +73,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
 	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0]);
-	arg[0] = user_to_kernel_ptr((const void *) arg[0]);
 	f->eax = remove((const char *) arg[0]);
 	break;
       }
@@ -85,7 +80,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
 	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0]);
-	arg[0] = user_to_kernel_ptr((const void *) arg[0]);
 	f->eax = open((const char *) arg[0]);
 	break; 		
       }
@@ -99,7 +93,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       {
 	get_arg(f, &arg[0], 3);
 	check_valid_buffer((void *) arg[1], (unsigned) arg[2]);
-	arg[1] = user_to_kernel_ptr((const void *) arg[1]);
 	f->eax = read(arg[0], (void *) arg[1], (unsigned) arg[2]);
 	break;
       }
@@ -107,7 +100,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       { 
 	get_arg(f, &arg[0], 3);
 	check_valid_buffer((void *) arg[1], (unsigned) arg[2]);
-	arg[1] = user_to_kernel_ptr((const void *) arg[1]);
 	f->eax = write(arg[0], (const void *) arg[1],
 		       (unsigned) arg[2]);
 	break;
@@ -133,7 +125,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       {
 	get_arg(f, &arg[0], 2);
-	arg[1] = user_to_kernel_ptr((const void *) arg[1]);
+	check_valid_ptr((const void *) arg[1]);
 	f->eax = mmap(arg[0], (void *) arg[1]);
 	break;
       }
@@ -340,23 +332,22 @@ void close (int fd)
   lock_release(&filesys_lock);
 }
 
-void check_valid_ptr (const void *vaddr)
+void check_valid_ptr(const void *vaddr)
 {
   if (!is_user_vaddr(vaddr) || vaddr < USER_VADDR_BOTTOM)
     {
       exit(ERROR);
     }
-}
-
-int user_to_kernel_ptr(const void *vaddr)
-{
-  check_valid_ptr(vaddr);
-  void *ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
-  if (!ptr)
+  struct sup_page_entry *spte = get_spte((void *) vaddr);
+  if (!spte)
     {
       exit(ERROR);
     }
-  return (int) ptr;
+  load_page(spte);
+  if (!spte->is_loaded)
+    {
+      exit(ERROR);
+    }
 }
 
 struct child_process* add_child_process (int pid)
@@ -441,8 +432,10 @@ void check_valid_buffer (void* buffer, unsigned size)
 
 void check_valid_string (const void* str)
 {
-  while (* (char *) user_to_kernel_ptr(str) != 0)
+  check_valid_ptr(str);
+  while (* (char *) str != 0)
     {
       str = (char *) str + 1;
+      check_valid_ptr(str);
     }
 }

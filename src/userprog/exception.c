@@ -6,7 +6,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
 #include "vm/page.h"
+
+#define STACK_HEURISTIC 32
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -152,14 +155,15 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool load = false;
-  if (not_present)
+  if (not_present && fault_addr > USER_VADDR_BOTTOM &&
+      is_user_vaddr(fault_addr))
     {
       struct sup_page_entry *spte = get_spte(fault_addr);
       if (spte)
 	{
-	  load = load_page(fault_addr);
+	  load = load_page(spte);
 	}
-      else if (fault_addr <= f->esp)
+      else if (fault_addr >= f->esp - STACK_HEURISTIC)
 	{
 	  load = grow_stack(fault_addr);
 	}

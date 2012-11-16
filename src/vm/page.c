@@ -9,6 +9,7 @@
 #include "userprog/process.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
 static unsigned page_hash_func (const struct hash_elem *e, void *aux UNUSED)
 {
@@ -65,15 +66,13 @@ struct sup_page_entry* get_spte (void *uva)
   return hash_entry (e, struct sup_page_entry, elem);
 }
 
-bool load_page (void *uva)
+bool load_page (struct sup_page_entry *spte)
 {
-  struct sup_page_entry *spte = get_spte(uva);
-  if (!spte)
-    {
-      return false;
-    }
-  
   bool success = false;
+  if (spte->is_loaded)
+    {
+      return success;
+    }
   switch (spte->type)
     {
     case FILE:
@@ -91,7 +90,7 @@ bool load_page (void *uva)
 
 bool load_swap (struct sup_page_entry *spte)
 {
-  uint8_t *frame = frame_alloc (PAL_USER);
+  uint8_t *frame = frame_alloc (PAL_USER, spte);
   if (!frame)
     {
       return false;
@@ -106,14 +105,9 @@ bool load_swap (struct sup_page_entry *spte)
   return true;
 }
 
-bool load_mmap (struct sup_page_entry *spte)
-{
-  return false;
-}
-
 bool load_file (struct sup_page_entry *spte)
 {
-  uint8_t *frame = frame_alloc (PAL_USER);
+  uint8_t *frame = frame_alloc (PAL_USER, spte);
   if (!frame)
     {
       return false;
@@ -131,9 +125,8 @@ bool load_file (struct sup_page_entry *spte)
       frame_free(frame);
       return false;
     }
-  // Set frame->pte = spte for eviction
-  spte->is_loaded = true;
-  
+
+  spte->is_loaded = true;  
   return true;
 }
 
@@ -197,16 +190,17 @@ bool grow_stack (void *uva)
     }
   spte->uva = pg_round_down(uva);
   spte->is_loaded = true;
+  spte->writable = true;
   spte->type = SWAP;
 
-  uint8_t *frame = frame_alloc (PAL_USER);
+  uint8_t *frame = frame_alloc (PAL_USER, spte);
   if (!frame)
     {
       free(spte);
       return false;
     }
 
-  if (!install_page(spte->uva, frame, true))
+  if (!install_page(spte->uva, frame, spte->writable))
     {
       free(spte);
       frame_free(frame);

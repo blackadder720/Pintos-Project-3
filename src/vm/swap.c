@@ -5,12 +5,12 @@ void swap_init (void)
   swap_block = block_get_role (BLOCK_SWAP);
   if (!swap_block)
     {
-      PANIC ("No swap device found!");
+      return;
     }
   swap_map = bitmap_create( block_size(swap_block) / SECTORS_PER_PAGE );
   if (!swap_map)
     {
-      PANIC ("Unable to initialize swap map");
+      return;
     }
   bitmap_set_all(swap_map, SWAP_FREE);
   lock_init(&swap_lock);
@@ -19,6 +19,10 @@ void swap_init (void)
 
 size_t swap_out (void *frame)
 {
+  if (!swap_block || !swap_map)
+    {
+      PANIC("Need swap partition but no swap partition present!");
+    }
   lock_acquire(&swap_lock);
   size_t free_index = bitmap_scan_and_flip(swap_map, 0, 1, SWAP_FREE);
   lock_release(&swap_lock);
@@ -38,6 +42,10 @@ size_t swap_out (void *frame)
 
 void swap_in (size_t used_index, void* frame)
 {
+  if (!swap_block || !swap_map)
+    {
+      return;
+    }
   lock_acquire(&swap_lock);
   if (bitmap_test(swap_map, used_index) == SWAP_FREE)
     {

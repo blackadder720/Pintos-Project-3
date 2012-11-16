@@ -5,6 +5,7 @@
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 
 void frame_table_init (void)
 {
@@ -12,7 +13,7 @@ void frame_table_init (void)
   lock_init(&frame_table_lock);
 }
 
-void* frame_alloc (enum palloc_flags flags)
+void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
 {
   if ( (flags & PAL_USER) == 0 )
     {
@@ -21,7 +22,7 @@ void* frame_alloc (enum palloc_flags flags)
   void *frame = palloc_get_page(flags);
   if (frame)
     {
-      frame_add_to_table(frame);
+      frame_add_to_table(frame, spte);
     }
   else
     {
@@ -30,6 +31,7 @@ void* frame_alloc (enum palloc_flags flags)
 	{
 	  PANIC ("Frame could not be evicted because swap is full!");
 	}
+      frame_add_to_table(frame, spte);
     }
   return frame;
 }
@@ -54,11 +56,12 @@ void frame_free (void *frame)
   palloc_free_page(frame);
 }
 
-void frame_add_to_table (void *frame)
+void frame_add_to_table (void *frame, struct sup_page_entry *spte)
 {
   struct frame_entry *fte = malloc(sizeof(struct frame_entry));
   fte->frame = frame;
-  
+  fte->spte = spte;
+
   lock_acquire(&frame_table_lock);
   list_push_back(&frame_table, &fte->elem);
   lock_release(&frame_table_lock);

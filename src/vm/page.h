@@ -33,7 +33,7 @@ struct sup_page_entry {
 void page_table_init (struct hash *spt);
 void page_table_destroy (struct hash *spt);
 
-bool load_page (void *uva);
+bool load_page (struct sup_page_entry *spte);
 bool load_mmap (struct sup_page_entry *spte);
 bool load_swap (struct sup_page_entry *spte);
 bool load_file (struct sup_page_entry *spte);

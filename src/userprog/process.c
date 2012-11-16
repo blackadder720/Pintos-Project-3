@@ -44,6 +44,10 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   // Get parsed file name
+  if (is_user_vaddr(file_name))
+    {
+      file_name = pagedir_get_page(thread_current()->pagedir, file_name);
+    }
   char *save_ptr;
   file_name = strtok_r((char *) file_name, " ", &save_ptr);
 
@@ -486,20 +490,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, const char* file_name, char** save_ptr) 
 {
-  uint8_t *kpage;
-  bool success = false;
-
-  kpage = frame_alloc (PAL_USER | PAL_ZERO);
-  if (!kpage)
-    {
-      return success;
-    }
-  success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+  bool success = grow_stack(((uint8_t *) PHYS_BASE) - PGSIZE);
   if (success)
     *esp = PHYS_BASE;
   else
     {
-      frame_free (kpage);
       return success;
     }
 
