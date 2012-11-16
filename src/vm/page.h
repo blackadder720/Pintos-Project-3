@@ -9,7 +9,7 @@
 #define MMAP 2
 
 // 256 KB
-#define MAX_STACK_SIZE (1 << 18)
+#define MAX_STACK_SIZE (1 << 23)
 
 struct sup_page_entry {
   uint8_t type;

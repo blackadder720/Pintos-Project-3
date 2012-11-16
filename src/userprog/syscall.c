@@ -19,7 +19,7 @@
 #define MAX_ARGS 3
 
 static void syscall_handler (struct intr_frame *);
-void get_arg (struct intr_frame *f, int *arg, int n, void* esp);
+void get_arg (struct intr_frame *f, int *arg, int n);
 struct sup_page_entry* check_valid_ptr (const void *vaddr, void* esp);
 void check_valid_buffer (void* buffer, unsigned size, void* esp,
 			 bool to_write);
@@ -47,53 +47,53 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
     case SYS_EXIT:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	exit(arg[0]);
 	break;
       }
     case SYS_EXEC:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = exec((const char *) arg[0]);
 	break;
       }
     case SYS_WAIT:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	f->eax = wait(arg[0]);
 	break;
       }
     case SYS_CREATE:
       {
-	get_arg(f, &arg[0], 2, f->esp);
+	get_arg(f, &arg[0], 2);
 	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = create((const char *)arg[0], (unsigned) arg[1]);
 	break;
       }
     case SYS_REMOVE:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = remove((const char *) arg[0]);
 	break;
       }
     case SYS_OPEN:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = open((const char *) arg[0]);
 	break; 		
       }
     case SYS_FILESIZE:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	f->eax = filesize(arg[0]);
 	break;
       }
     case SYS_READ:
       {
-	get_arg(f, &arg[0], 3, f->esp);
+	get_arg(f, &arg[0], 3);
 	check_valid_buffer((void *) arg[1], (unsigned) arg[2], f->esp,
 			   true);
 	f->eax = read(arg[0], (void *) arg[1], (unsigned) arg[2]);
@@ -101,7 +101,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
     case SYS_WRITE:
       { 
-	get_arg(f, &arg[0], 3, f->esp);
+	get_arg(f, &arg[0], 3);
 	check_valid_buffer((void *) arg[1], (unsigned) arg[2], f->esp,
 			   false);
 	f->eax = write(arg[0], (const void *) arg[1],
@@ -110,32 +110,32 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
     case SYS_SEEK:
       {
-	get_arg(f, &arg[0], 2, f->esp);
+	get_arg(f, &arg[0], 2);
 	seek(arg[0], (unsigned) arg[1]);
 	break;
       } 
     case SYS_TELL:
       { 
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	f->eax = tell(arg[0]);
 	break;
       }
     case SYS_CLOSE:
       { 
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	close(arg[0]);
 	break;
       }
     case SYS_MMAP:
       {
-	get_arg(f, &arg[0], 2, f->esp);
+	get_arg(f, &arg[0], 2);
 	check_valid_ptr((const void *) arg[1], f->esp);
 	f->eax = mmap(arg[0], (void *) arg[1]);
 	break;
       }
     case SYS_MUNMAP:
       {
-	get_arg(f, &arg[0], 1, f->esp);
+	get_arg(f, &arg[0], 1);
 	munmap(arg[0]);
 	break;
       }
@@ -425,14 +425,14 @@ void remove_child_processes (void)
     }
 }
 
-void get_arg (struct intr_frame *f, int *arg, int n, void* esp)
+void get_arg (struct intr_frame *f, int *arg, int n)
 {
   int i;
   int *ptr;
   for (i = 0; i < n; i++)
     {
       ptr = (int *) f->esp + i + 1;
-      check_valid_ptr((const void *) ptr, esp);
+      check_valid_ptr((const void *) ptr, f->esp);
       arg[i] = *ptr;
     }
 }
