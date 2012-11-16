@@ -129,7 +129,6 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
       {
 	get_arg(f, &arg[0], 2);
-	check_valid_ptr((const void *) arg[1], f->esp);
 	f->eax = mmap(arg[0], (void *) arg[1]);
 	break;
       }
@@ -145,7 +144,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 int mmap (int fd, void *addr)
 {
   struct file *file = process_get_file(fd);
-  if (!file || !addr || ((uint32_t) addr % PGSIZE) != 0)
+  if (!file || !is_user_vaddr(addr) || addr < USER_VADDR_BOTTOM ||
+      ((uint32_t) addr % PGSIZE) != 0)
     {
       return ERROR;
     }
