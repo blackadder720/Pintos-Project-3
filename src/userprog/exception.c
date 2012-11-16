@@ -9,8 +9,6 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 
-#define STACK_HEURISTIC 32
-
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 

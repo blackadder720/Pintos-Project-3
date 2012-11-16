@@ -19,10 +19,12 @@
 #define MAX_ARGS 3
 
 static void syscall_handler (struct intr_frame *);
-void get_arg (struct intr_frame *f, int *arg, int n);
-void check_valid_ptr (const void *vaddr);
-void check_valid_buffer (void* buffer, unsigned size);
-void check_valid_string (const void* str);
+void get_arg (struct intr_frame *f, int *arg, int n, void* esp);
+struct sup_page_entry* check_valid_ptr (const void *vaddr, void* esp);
+void check_valid_buffer (void* buffer, unsigned size, void* esp,
+			 bool to_write);
+void check_valid_string (const void* str, void* esp);
+void check_write_permission (struct sup_page_entry *spte);
 
 void
 syscall_init (void) 
@@ -35,7 +37,7 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   int arg[MAX_ARGS];
-  check_valid_ptr((const void*) f->esp);
+  check_valid_ptr((const void*) f->esp, f->esp);
   switch (* (int *) f->esp)
     {
     case SYS_HALT:
@@ -45,93 +47,95 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
     case SYS_EXIT:
       {
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	exit(arg[0]);
 	break;
       }
     case SYS_EXEC:
       {
-	get_arg(f, &arg[0], 1);
-	check_valid_string((const void *) arg[0]);
+	get_arg(f, &arg[0], 1, f->esp);
+	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = exec((const char *) arg[0]);
 	break;
       }
     case SYS_WAIT:
       {
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	f->eax = wait(arg[0]);
 	break;
       }
     case SYS_CREATE:
       {
-	get_arg(f, &arg[0], 2);
-	check_valid_string((const void *) arg[0]);
+	get_arg(f, &arg[0], 2, f->esp);
+	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = create((const char *)arg[0], (unsigned) arg[1]);
 	break;
       }
     case SYS_REMOVE:
       {
-	get_arg(f, &arg[0], 1);
-	check_valid_string((const void *) arg[0]);
+	get_arg(f, &arg[0], 1, f->esp);
+	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = remove((const char *) arg[0]);
 	break;
       }
     case SYS_OPEN:
       {
-	get_arg(f, &arg[0], 1);
-	check_valid_string((const void *) arg[0]);
+	get_arg(f, &arg[0], 1, f->esp);
+	check_valid_string((const void *) arg[0], f->esp);
 	f->eax = open((const char *) arg[0]);
 	break; 		
       }
     case SYS_FILESIZE:
       {
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	f->eax = filesize(arg[0]);
 	break;
       }
     case SYS_READ:
       {
-	get_arg(f, &arg[0], 3);
-	check_valid_buffer((void *) arg[1], (unsigned) arg[2]);
+	get_arg(f, &arg[0], 3, f->esp);
+	check_valid_buffer((void *) arg[1], (unsigned) arg[2], f->esp,
+			   true);
 	f->eax = read(arg[0], (void *) arg[1], (unsigned) arg[2]);
 	break;
       }
     case SYS_WRITE:
       { 
-	get_arg(f, &arg[0], 3);
-	check_valid_buffer((void *) arg[1], (unsigned) arg[2]);
+	get_arg(f, &arg[0], 3, f->esp);
+	check_valid_buffer((void *) arg[1], (unsigned) arg[2], f->esp,
+			   false);
 	f->eax = write(arg[0], (const void *) arg[1],
 		       (unsigned) arg[2]);
 	break;
       }
     case SYS_SEEK:
       {
-	get_arg(f, &arg[0], 2);
+	get_arg(f, &arg[0], 2, f->esp);
 	seek(arg[0], (unsigned) arg[1]);
 	break;
       } 
     case SYS_TELL:
       { 
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	f->eax = tell(arg[0]);
 	break;
       }
     case SYS_CLOSE:
       { 
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	close(arg[0]);
 	break;
       }
     case SYS_MMAP:
       {
-	get_arg(f, &arg[0], 2);
-	check_valid_ptr((const void *) arg[1]);
+	get_arg(f, &arg[0], 2, f->esp);
+	check_valid_ptr((const void *) arg[1], f->esp);
 	f->eax = mmap(arg[0], (void *) arg[1]);
 	break;
       }
     case SYS_MUNMAP:
       {
-	get_arg(f, &arg[0], 1);
+	get_arg(f, &arg[0], 1, f->esp);
 	munmap(arg[0]);
 	break;
       }
@@ -332,22 +336,36 @@ void close (int fd)
   lock_release(&filesys_lock);
 }
 
-void check_valid_ptr(const void *vaddr)
+void check_write_permission (struct sup_page_entry *spte)
+{
+  if (!spte->writable)
+    {
+      exit(ERROR);
+    }
+}
+
+struct sup_page_entry* check_valid_ptr(const void *vaddr, void* esp)
 {
   if (!is_user_vaddr(vaddr) || vaddr < USER_VADDR_BOTTOM)
     {
       exit(ERROR);
     }
+  bool load = false;
   struct sup_page_entry *spte = get_spte((void *) vaddr);
-  if (!spte)
+  if (spte)
+    {
+      load_page(spte);
+      load = spte->is_loaded;
+    }
+  else if (vaddr >= esp - STACK_HEURISTIC)
+    {
+      load = grow_stack((void *) vaddr);
+    }
+  if (!load)
     {
       exit(ERROR);
     }
-  load_page(spte);
-  if (!spte->is_loaded)
-    {
-      exit(ERROR);
-    }
+  return spte;
 }
 
 struct child_process* add_child_process (int pid)
@@ -407,35 +425,44 @@ void remove_child_processes (void)
     }
 }
 
-void get_arg (struct intr_frame *f, int *arg, int n)
+void get_arg (struct intr_frame *f, int *arg, int n, void* esp)
 {
   int i;
   int *ptr;
   for (i = 0; i < n; i++)
     {
       ptr = (int *) f->esp + i + 1;
-      check_valid_ptr((const void *) ptr);
+      check_valid_ptr((const void *) ptr, esp);
       arg[i] = *ptr;
     }
 }
 
-void check_valid_buffer (void* buffer, unsigned size)
+void check_valid_buffer (void* buffer, unsigned size, void* esp,
+			 bool to_write)
 {
   unsigned i;
   char* local_buffer = (char *) buffer;
   for (i = 0; i < size; i++)
     {
-      check_valid_ptr((const void*) local_buffer);
+      struct sup_page_entry *spte = check_valid_ptr((const void*)
+						    local_buffer, esp);
+      if (spte && to_write)
+	{
+	  if (!spte->writable)
+	    {
+	      exit(ERROR);
+	    }
+	}
       local_buffer++;
     }
 }
 
-void check_valid_string (const void* str)
+void check_valid_string (const void* str, void* esp)
 {
-  check_valid_ptr(str);
+  check_valid_ptr(str, esp);
   while (* (char *) str != 0)
     {
       str = (char *) str + 1;
-      check_valid_ptr(str);
+      check_valid_ptr(str, esp);
     }
 }
