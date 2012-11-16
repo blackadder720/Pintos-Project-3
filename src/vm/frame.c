@@ -2,7 +2,9 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 void frame_table_init (void)
 {
@@ -23,7 +25,8 @@ void* frame_alloc (enum palloc_flags flags)
     }
   else
     {
-      if (!frame_evict(frame))
+      frame = frame_evict();
+      if (!frame)
 	{
 	  PANIC ("Frame could not be evicted because swap is full!");
 	}
@@ -61,8 +64,32 @@ void frame_add_to_table (void *frame)
   lock_release(&frame_table_lock);
 }
 
-bool frame_evict (void *frame)
+void* frame_evict (void)
 {
-  return false;
-  // Use clock algorithm
+  struct list_elem *e;
+  
+  lock_acquire(&frame_table_lock);
+  for (e = list_begin(&frame_table); e != list_end(&frame_table);
+       e = list_next(e))
+    {
+      struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
+      if (pagedir_is_accessed(thread_current()->pagedir,
+			      fte->spte->uva))
+	{
+	  pagedir_set_accessed(thread_current()->pagedir, fte->spte->uva,
+			       false);
+	}
+      else
+	{
+	  if (pagedir_is_dirty(thread_current()->pagedir, fte->spte->uva)
+	      || fte->spte->type == SWAP)
+	    {
+	      fte->spte->swap_index = swap_out(fte->frame);
+	    }
+	  fte->spte->is_loaded = false;
+	  return fte->frame;
+	}
+    }
+  lock_release(&frame_table_lock);
+  return NULL;
 }

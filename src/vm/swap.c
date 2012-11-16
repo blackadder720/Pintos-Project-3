@@ -1,4 +1,4 @@
-#define "vm/swap.h"
+#include "vm/swap.h"
 
 void swap_init (void)
 {
@@ -31,7 +31,7 @@ size_t swap_out (void *frame)
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     { 
       block_write(swap_block, free_index * SECTORS_PER_PAGE + i,
-		  (uint8_t *) frame + i * SECTOR_SIZE);
+		  (uint8_t *) frame + i * BLOCK_SECTOR_SIZE);
     }
   return free_index;
 }
@@ -49,7 +49,7 @@ void swap_in (size_t used_index, void* frame)
   size_t i;
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     {
-      block_read(swap_device, used_index * SECTORS_PER_PAGE + i,
-		 (uint8_t *) frame + i * SECTOR_SIZE);
+      block_read(swap_block, used_index * SECTORS_PER_PAGE + i,
+		 (uint8_t *) frame + i * BLOCK_SECTOR_SIZE);
     }
 }
