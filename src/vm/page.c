@@ -179,7 +179,7 @@ bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
 
 bool grow_stack (void *uva)
 {
-  if (PHYS_BASE - pg_round_down(uva) > MAX_STACK_SIZE)
+  if ( (size_t) (PHYS_BASE - pg_round_down(uva)) > MAX_STACK_SIZE)
     {
       return false;
     }

@@ -143,9 +143,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 int mmap (int fd, void *addr)
 {
-  struct file *file = process_get_file(fd);
-  if (!file || !is_user_vaddr(addr) || addr < USER_VADDR_BOTTOM ||
+  struct file *old_file = process_get_file(fd);
+  if (!old_file || !is_user_vaddr(addr) || addr < USER_VADDR_BOTTOM ||
       ((uint32_t) addr % PGSIZE) != 0)
+    {
+      return ERROR;
+    }
+  struct file *file = file_reopen(old_file);
+  if (!file || file_length(old_file) == 0)
     {
       return ERROR;
     }

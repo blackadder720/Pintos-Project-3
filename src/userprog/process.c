@@ -646,6 +646,7 @@ void process_remove_mmap (int mapping)
 {
   struct thread *t = thread_current();
   struct list_elem *next, *e = list_begin(&t->mmap_list);
+  bool close = false;
 
   while (e != list_end (&t->mmap_list))
     {
@@ -665,6 +666,11 @@ void process_remove_mmap (int mapping)
 	    }
 	  hash_delete(&t->spt, &mm->spte->elem);
 	  list_remove(&mm->elem);
+	  if (!close)
+	    {
+	      file_close(mm->spte->file);
+	      close = true;
+	    }
 	  free(mm->spte);
 	  free(mm);
 	}
