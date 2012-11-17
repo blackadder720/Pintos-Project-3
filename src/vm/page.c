@@ -174,7 +174,12 @@ bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
       return false;
     }
 
-  return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
+  if (hash_insert(&thread_current()->spt, &spte->elem))
+    {
+      spte->type = HASH_ERROR;
+      return false;
+    }
+  return true;
 }
 
 bool grow_stack (void *uva)

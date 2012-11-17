@@ -7,6 +7,7 @@
 #define FILE 0
 #define SWAP 1
 #define MMAP 2
+#define HASH_ERROR 3
 
 // 256 KB
 #define MAX_STACK_SIZE (1 << 23)

@@ -664,7 +664,10 @@ void process_remove_mmap (int mapping)
 	      frame_free(pagedir_get_page(t->pagedir, mm->spte->uva));
 	      pagedir_clear_page(t->pagedir, mm->spte->uva);
 	    }
-	  hash_delete(&t->spt, &mm->spte->elem);
+	  if (mm->spte->type != HASH_ERROR)
+	    {
+	      hash_delete(&t->spt, &mm->spte->elem);
+	    }
 	  list_remove(&mm->elem);
 	  if (!close)
 	    {
