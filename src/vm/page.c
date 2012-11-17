@@ -95,12 +95,12 @@ bool load_swap (struct sup_page_entry *spte)
     {
       return false;
     }
-  swap_in(spte->swap_index, frame);
   if (!install_page(spte->uva, frame, spte->writable))
     {
       frame_free(frame);
       return false;
     }
+  swap_in(spte->swap_index, spte->uva);
   spte->is_loaded = true;
   return true;
 }

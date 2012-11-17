@@ -27,7 +27,8 @@ void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
     }
   else
     {
-      frame = frame_evict(flags, spte);
+      frame_evict();
+      frame = palloc_get_page(flags);
       if (!frame)
 	{
 	  PANIC ("Frame could not be evicted because swap is full!");
@@ -68,7 +69,7 @@ void frame_add_to_table (void *frame, struct sup_page_entry *spte)
   lock_release(&frame_table_lock);
 }
 
-void* frame_evict (enum palloc_flags flags, struct sup_page_entry *spte)
+void frame_evict (void)
 {
   lock_acquire(&frame_table_lock);
   struct list_elem *e = list_begin(&frame_table);
@@ -98,11 +99,13 @@ void* frame_evict (enum palloc_flags flags, struct sup_page_entry *spte)
 		}
 	    }
 	  fte->spte->is_loaded = false;
-	  lock_release(&frame_table_lock);
 	  struct sup_page_entry *rem_spte = fte->spte;
-	  frame_free(fte->frame);
+	  list_remove(&fte->elem);
+	  palloc_free_page(fte->frame);
+	  free(fte);
 	  pagedir_clear_page(thread_current()->pagedir, rem_spte->uva);
-	  return frame_alloc(flags, spte);
+	  lock_release(&frame_table_lock);
+	  return;
 	}
       e = list_next(e);
       if (e == list_end(&frame_table))
@@ -110,5 +113,4 @@ void* frame_evict (enum palloc_flags flags, struct sup_page_entry *spte)
 	  e = list_begin(&frame_table);
 	}
     }
-  return NULL;
 }
