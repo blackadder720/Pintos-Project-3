@@ -648,7 +648,8 @@ void process_remove_mmap (int mapping)
 {
   struct thread *t = thread_current();
   struct list_elem *next, *e = list_begin(&t->mmap_list);
-  bool close = false;
+  struct file *f = NULL;
+  int close = 0;
 
   while (e != list_end (&t->mmap_list))
     {
@@ -656,12 +657,15 @@ void process_remove_mmap (int mapping)
       struct mmap_file *mm = list_entry (e, struct mmap_file, elem);
       if (mm->mapid == mapping || mapping == CLOSE_ALL)
 	{
+	  mm->spte->pinned = true;
 	  if (mm->spte->is_loaded)
 	    {
 	      if (pagedir_is_dirty(t->pagedir, mm->spte->uva))
 		{
+		  lock_acquire(&filesys_lock);
 		  file_write_at(mm->spte->file, mm->spte->uva,
 				mm->spte->read_bytes, mm->spte->offset);
+		  lock_release(&filesys_lock);
 		}
 	      frame_free(pagedir_get_page(t->pagedir, mm->spte->uva));
 	      pagedir_clear_page(t->pagedir, mm->spte->uva);
@@ -671,14 +675,26 @@ void process_remove_mmap (int mapping)
 	      hash_delete(&t->spt, &mm->spte->elem);
 	    }
 	  list_remove(&mm->elem);
-	  if (!close)
+	  if (mm->mapid != close)
 	    {
-	      file_close(mm->spte->file);
-	      close = true;
+	      if (f)
+		{
+		  lock_acquire(&filesys_lock);
+		  file_close(f);
+		  lock_release(&filesys_lock);
+		}
+	      close = mm->mapid;
+	      f = mm->spte->file;
 	    }
 	  free(mm->spte);
 	  free(mm);
 	}
       e = next;
+    }
+  if (f)
+    {
+      lock_acquire(&filesys_lock);
+      file_close(f);
+      lock_release(&filesys_lock);
     }
 }

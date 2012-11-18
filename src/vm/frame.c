@@ -4,6 +4,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
@@ -89,12 +90,16 @@ void* frame_evict (enum palloc_flags flags)
 	    }
 	  else
 	    {
-	      if (pagedir_is_dirty(t->pagedir, fte->spte->uva))
+	      if (pagedir_is_dirty(t->pagedir, fte->spte->uva) ||
+		  fte->spte->type == SWAP)
 		{
 		  if (fte->spte->type == MMAP)
 		    {
+		      lock_acquire(&filesys_lock);
 		      file_write_at(fte->spte->file, fte->frame,
-				    fte->spte->read_bytes, fte->spte->offset);
+				    fte->spte->read_bytes,
+				    fte->spte->offset);
+		      lock_release(&filesys_lock);
 		    }
 		  else
 		    {

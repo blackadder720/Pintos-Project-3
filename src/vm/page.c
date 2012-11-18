@@ -8,6 +8,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
@@ -121,13 +122,16 @@ bool load_file (struct sup_page_entry *spte)
     }
   if (spte->read_bytes > 0)
     {
+      lock_acquire(&filesys_lock);
       if ((int) spte->read_bytes != file_read_at(spte->file, frame,
 						 spte->read_bytes,
 						 spte->offset))
 	{
+	  lock_release(&filesys_lock);
 	  frame_free(frame);
 	  return false;
 	}
+      lock_release(&filesys_lock);
       memset(frame + spte->read_bytes, 0, spte->zero_bytes);
     }
 
