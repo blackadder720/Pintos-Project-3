@@ -251,27 +251,61 @@ true. The frame eviction algorithm ignores entries with a true pinned flag,
 so it won't evict them. Then, when the kernel is done accessing the user
 data, it sets the pinned flag back to false.
 
-Using a simple boolean, while it may increase the likelihood of race
-conditions, was a much simpler implementation than locking. In practice,
-we found a lock per page table entry caused many asserts / bugs in the
-kernel, especially when it came to threads trying to acquire or release an
-spte lock more than once.
-
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+While in page fault and syscalls, the process Q sets the spte's pinned
+flag of the user memory it is accessing or modifying to true. Thus, when P
+is iterating through the frame table, it will ignore Q's frame until Q
+exits the page fault or syscall (where it will set the pinned flag to
+false). Then, when process P is trying to evict the frame, it sets the
+is_loaded flag to false, so Q must reload the page when trying to fault
+the page back in.
+
+Note that race conditions i.e. evicting a frame while the kernel is
+accessing the frame's data is avoided using page faults. For example, a
+process P evicts Q's frame while Q's kernel thread is reading the frame's
+data (this is possible via a certain interleaving of instructions). Then,
+Q's kernel thread page faults and simply gets the spte and reads the frame
+back in (page fault is written in such a way to allow for the kernel to do
+this). Note that it may have to evict a frame, which may cause a page
+fault on another process R reading data from the frame. This could cause
+an infinite recursion of frame evictions in theory, but in practice, it
+has shown to work much better than using locks.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+Again, while process P is loading the page, its spte is pinned. Thus, when
+Q is running through the frame table, it cannot evict the frame since it
+has been pinned.
+
+However, if Q starts to evict the frame and then P pins it and starts to
+load it, then Q will evict the frame and P will page fault on that
+page. As described above, page fault allows the kernel to load in user
+pages from memory. Again, the versatility of page fault with both user and
+kernel contexts allows us to avoid the complexity of locking.
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+During system calls, we manually load in pages that have not been loaded
+in and lock the pages using the pinned flag. This ideally prevents the
+frame table from evicting the page, but as described above, this can still
+happen. Thus, the page fault function allows the kernel to fault in user
+pages as well.
+
+If a virtual address is invalid (i.e. its not an existing virtual address
+or is not a stack access), the user process is simply killed with the exit
+command (with an error code -1). Note that all pages are freed during exit
+to prevent memory leaks.
 
 ---- RATIONALE ----
 
@@ -281,6 +315,13 @@ spte lock more than once.
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+We wanted to use parallelism, but not make deadlock more likely. Thus, we
+decided to use a boolean with possible race condition detection using page
+faults. As described above, there are situations in which this design
+could fail i.e. infinite recursion of frame evictions, but in practice,
+these situations are rare. Also, this design is simple to understand and
+does not add the complexity of locking.
 
 			 MEMORY MAPPED FILES
 			 ===================
