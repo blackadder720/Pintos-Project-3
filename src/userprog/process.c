@@ -33,7 +33,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp,
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *parsed_fn;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -44,15 +44,17 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   // Get parsed file name
-  if (is_user_vaddr(file_name))
-    {
-      file_name = pagedir_get_page(thread_current()->pagedir, file_name);
-    }
+  parsed_fn = palloc_get_page (0);
+  if (parsed_fn == NULL)
+    return TID_ERROR;
+  strlcpy (parsed_fn, file_name, PGSIZE);
+
   char *save_ptr;
-  file_name = strtok_r((char *) file_name, " ", &save_ptr);
+  parsed_fn = strtok_r((char *) parsed_fn, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (parsed_fn, PRI_DEFAULT, start_process, fn_copy);
+  palloc_free_page(parsed_fn);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy);
   return tid;
