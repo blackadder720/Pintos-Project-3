@@ -27,8 +27,11 @@ void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
     }
   else
     {
-      frame = frame_evict(flags);
-      lock_release(&frame_table_lock);
+      while (!frame)
+	{
+	  frame = frame_evict(flags);
+	  lock_release(&frame_table_lock);
+	}
       if (!frame)
 	{
 	  PANIC ("Frame could not be evicted because swap is full!");
@@ -77,32 +80,35 @@ void* frame_evict (enum palloc_flags flags)
   while (true)
     {
       struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
-      struct thread *t = fte->thread;
-      if (pagedir_is_accessed(t->pagedir, fte->spte->uva))
+      if (!fte->spte->pinned)
 	{
-	  pagedir_set_accessed(t->pagedir, fte->spte->uva, false);
-	}
-      else
-	{
-	  if (pagedir_is_dirty(t->pagedir, fte->spte->uva))
+	  struct thread *t = fte->thread;
+	  if (pagedir_is_accessed(t->pagedir, fte->spte->uva))
 	    {
-	      if (fte->spte->type == MMAP)
-		{
-		  file_write_at(fte->spte->file, fte->frame,
-				fte->spte->read_bytes, fte->spte->offset);
-		}
-	      else
-		{
-		  fte->spte->type = SWAP;
-		  fte->spte->swap_index = swap_out(fte->frame);
-		}
+	      pagedir_set_accessed(t->pagedir, fte->spte->uva, false);
 	    }
-	  fte->spte->is_loaded = false;
-	  list_remove(&fte->elem);
-	  palloc_free_page(fte->frame);
-	  pagedir_clear_page(t->pagedir, fte->spte->uva);
-	  free(fte);
-	  return palloc_get_page(flags);
+	  else
+	    {
+	      if (pagedir_is_dirty(t->pagedir, fte->spte->uva))
+		{
+		  if (fte->spte->type == MMAP)
+		    {
+		      file_write_at(fte->spte->file, fte->frame,
+				    fte->spte->read_bytes, fte->spte->offset);
+		    }
+		  else
+		    {
+		      fte->spte->type = SWAP;
+		      fte->spte->swap_index = swap_out(fte->frame);
+		    }
+		}
+	      fte->spte->is_loaded = false;
+	      list_remove(&fte->elem);
+	      palloc_free_page(fte->frame);
+	      pagedir_clear_page(t->pagedir, fte->spte->uva);
+	      free(fte);
+	      return palloc_get_page(flags);
+	    }
 	}
       e = list_next(e);
       if (e == list_end(&frame_table))

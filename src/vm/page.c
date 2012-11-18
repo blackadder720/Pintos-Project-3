@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "filesys/file.h"
+#include "threads/interrupt.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
@@ -147,6 +148,7 @@ bool add_file_to_page_table (struct file *file, int32_t ofs, uint8_t *upage,
   spte->writable = writable;
   spte->is_loaded = false;
   spte->type = FILE;
+  spte->pinned = false;
 
   return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);
 }
@@ -167,6 +169,7 @@ bool add_mmap_to_page_table(struct file *file, int32_t ofs, uint8_t *upage,
   spte->is_loaded = false;
   spte->type = MMAP;
   spte->writable = true;
+  spte->pinned = false;
 
   if (!process_add_mmap(spte))
     {
@@ -197,6 +200,14 @@ bool grow_stack (void *uva)
   spte->is_loaded = true;
   spte->writable = true;
   spte->type = SWAP;
+  if (intr_context())
+    {
+      spte->pinned = false;
+    }
+  else
+    {
+      spte->pinned = true;
+    }
 
   uint8_t *frame = frame_alloc (PAL_USER, spte);
   if (!frame)

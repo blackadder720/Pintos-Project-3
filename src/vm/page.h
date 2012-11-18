@@ -18,6 +18,7 @@ struct sup_page_entry {
   bool writable;
 
   bool is_loaded;
+  bool pinned;
 
   // For files
   struct file *file;
