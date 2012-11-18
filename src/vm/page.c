@@ -70,6 +70,7 @@ struct sup_page_entry* get_spte (void *uva)
 bool load_page (struct sup_page_entry *spte)
 {
   bool success = false;
+  spte->pinned = true;
   if (spte->is_loaded)
     {
       return success;
@@ -200,14 +201,7 @@ bool grow_stack (void *uva)
   spte->is_loaded = true;
   spte->writable = true;
   spte->type = SWAP;
-  if (intr_context())
-    {
-      spte->pinned = false;
-    }
-  else
-    {
-      spte->pinned = true;
-    }
+  spte->pinned = true;
 
   uint8_t *frame = frame_alloc (PAL_USER, spte);
   if (!frame)
@@ -221,6 +215,11 @@ bool grow_stack (void *uva)
       free(spte);
       frame_free(frame);
       return false;
+    }
+
+  if (intr_context())
+    {
+      spte->pinned = false;
     }
 
   return (hash_insert(&thread_current()->spt, &spte->elem) == NULL);

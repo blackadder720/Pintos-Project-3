@@ -368,7 +368,6 @@ struct sup_page_entry* check_valid_ptr(const void *vaddr, void* esp)
   struct sup_page_entry *spte = get_spte((void *) vaddr);
   if (spte)
     {
-      spte->pinned = true;
       load_page(spte);
       load = spte->is_loaded;
     }

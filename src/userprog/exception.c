@@ -160,6 +160,7 @@ page_fault (struct intr_frame *f)
       if (spte)
 	{
 	  load = load_page(spte);
+	  spte->pinned = false;
 	}
       else if (fault_addr >= f->esp - STACK_HEURISTIC)
 	{

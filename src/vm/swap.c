@@ -30,6 +30,7 @@ size_t swap_out (void *frame)
     {
       PANIC("Swap partition is full!");
     }
+
   size_t i;
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     { 
@@ -49,10 +50,10 @@ void swap_in (size_t used_index, void* frame)
   lock_acquire(&swap_lock);
   if (bitmap_test(swap_map, used_index) == SWAP_FREE)
     {
-      lock_release(&swap_lock);
-      PANIC ("SHIT");
+      PANIC ("Trying to swap in a free block! Kernel panicking.");
     }
   bitmap_flip(swap_map, used_index);
+
   size_t i;
   for (i = 0; i < SECTORS_PER_PAGE; i++)
     {
