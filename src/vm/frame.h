@@ -15,6 +15,7 @@ struct list frame_table;
 struct frame_entry {
   void *frame;
   struct sup_page_entry *spte;
+  struct thread *thread;
   struct list_elem elem;
 };
 
@@ -22,6 +23,6 @@ void frame_table_init (void);
 void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte);
 void frame_free (void *frame);
 void frame_add_to_table (void *frame, struct sup_page_entry *spte);
-void frame_evict (void);
+void* frame_evict (enum palloc_flags flags);
 
 #endif /* vm/frame.h */

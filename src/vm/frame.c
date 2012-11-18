@@ -27,8 +27,8 @@ void* frame_alloc (enum palloc_flags flags, struct sup_page_entry *spte)
     }
   else
     {
-      frame_evict();
-      frame = palloc_get_page(flags);
+      frame = frame_evict(flags);
+      lock_release(&frame_table_lock);
       if (!frame)
 	{
 	  PANIC ("Frame could not be evicted because swap is full!");
@@ -63,13 +63,13 @@ void frame_add_to_table (void *frame, struct sup_page_entry *spte)
   struct frame_entry *fte = malloc(sizeof(struct frame_entry));
   fte->frame = frame;
   fte->spte = spte;
-
+  fte->thread = thread_current();
   lock_acquire(&frame_table_lock);
   list_push_back(&frame_table, &fte->elem);
   lock_release(&frame_table_lock);
 }
 
-void frame_evict (void)
+void* frame_evict (enum palloc_flags flags)
 {
   lock_acquire(&frame_table_lock);
   struct list_elem *e = list_begin(&frame_table);
@@ -77,19 +77,18 @@ void frame_evict (void)
   while (true)
     {
       struct frame_entry *fte = list_entry(e, struct frame_entry, elem);
-      if (pagedir_is_accessed(thread_current()->pagedir,
-			      fte->spte->uva))
+      struct thread *t = fte->thread;
+      if (pagedir_is_accessed(t->pagedir, fte->spte->uva))
 	{
-	  pagedir_set_accessed(thread_current()->pagedir, fte->spte->uva,
-			       false);
+	  pagedir_set_accessed(t->pagedir, fte->spte->uva, false);
 	}
       else
 	{
-	  if (pagedir_is_dirty(thread_current()->pagedir, fte->spte->uva))
+	  if (pagedir_is_dirty(t->pagedir, fte->spte->uva))
 	    {
 	      if (fte->spte->type == MMAP)
 		{
-		  file_write_at(fte->spte->file, fte->spte->uva,
+		  file_write_at(fte->spte->file, fte->frame,
 				fte->spte->read_bytes, fte->spte->offset);
 		}
 	      else
@@ -99,13 +98,11 @@ void frame_evict (void)
 		}
 	    }
 	  fte->spte->is_loaded = false;
-	  struct sup_page_entry *rem_spte = fte->spte;
 	  list_remove(&fte->elem);
 	  palloc_free_page(fte->frame);
+	  pagedir_clear_page(t->pagedir, fte->spte->uva);
 	  free(fte);
-	  pagedir_clear_page(thread_current()->pagedir, rem_spte->uva);
-	  lock_release(&frame_table_lock);
-	  return;
+	  return palloc_get_page(flags);
 	}
       e = list_next(e);
       if (e == list_end(&frame_table))
