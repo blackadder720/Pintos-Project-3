@@ -104,8 +104,8 @@ void* frame_evict (enum palloc_flags flags)
 		}
 	      fte->spte->is_loaded = false;
 	      list_remove(&fte->elem);
-	      palloc_free_page(fte->frame);
 	      pagedir_clear_page(t->pagedir, fte->spte->uva);
+	      palloc_free_page(fte->frame);
 	      free(fte);
 	      return palloc_get_page(flags);
 	    }

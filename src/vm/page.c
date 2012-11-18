@@ -109,18 +109,27 @@ bool load_swap (struct sup_page_entry *spte)
 
 bool load_file (struct sup_page_entry *spte)
 {
-  uint8_t *frame = frame_alloc (PAL_USER, spte);
+  enum palloc_flags flags = PAL_USER;
+  if (spte->read_bytes == 0)
+    {
+      flags |= PAL_ZERO;
+    }
+  uint8_t *frame = frame_alloc(flags, spte);
   if (!frame)
     {
       return false;
     }
-  if ((int) spte->read_bytes != file_read_at(spte->file, frame,
-					     spte->read_bytes, spte->offset))
+  if (spte->read_bytes > 0)
     {
-      frame_free(frame);
-      return false;
+      if ((int) spte->read_bytes != file_read_at(spte->file, frame,
+						 spte->read_bytes,
+						 spte->offset))
+	{
+	  frame_free(frame);
+	  return false;
+	}
+      memset(frame + spte->read_bytes, 0, spte->zero_bytes);
     }
-  memset(frame + spte->read_bytes, 0, spte->zero_bytes);
 
   if (!install_page(spte->uva, frame, spte->writable))
     {
